@@ -13,9 +13,9 @@ The automation working for EOP (HaUI)
 
 ## Known bug, milestone
 
- - OCR Bug:
-        - In some case it will reconize "C" as "Cc" (need temp fix by change all "Cc" to "C" in code or fix OCR(impossible))
-        - Also sometime misread the dot "." and other chacracters aswell!
+ -   OCR Bug:
+     - In some case it will reconize "C" as "Cc" (need temp fix by change all "Cc" to "C" in code or fix OCR(impossible))
+     - Also sometime misread the dot "." and other chacracters aswell!
  - Task type: cannot work on word scramble task type (the task give a how to spell or a voice someone saying a word with a bunch of characters and force you to put the character in correct order)
  - Stopping: the stop command still need to the run cycle to complete (?)
  - Notifying: make a notify when unsupported task type or error appear
