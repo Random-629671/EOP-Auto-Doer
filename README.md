@@ -4,6 +4,10 @@ The automation working for EOP (HaUI)
 <h1 align="center">EOP Auto Doer (Still need some attention)</h1>
 <p align="center">
 
+# Note
+
+This things still need some of your attention by sometimes checking, answer recorrect and/or other things i forgot to add here
+
 ## Tutorials
 
  - Download code.
