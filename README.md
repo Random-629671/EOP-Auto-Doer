@@ -7,6 +7,7 @@ The automation working for EOP (HaUI)
 # Note
 
 This things still need some of your attention by sometimes checking, answer recorrect and/or other things i forgot to add here
+Come with Tesseract.js
 
 ## Tutorials
 
