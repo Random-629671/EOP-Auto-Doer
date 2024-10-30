@@ -30,6 +30,15 @@ document.getElementById("stop").addEventListener("click", async () => {
     });
 });
 
+document.getElementById("emergency").addEventListener("click", async () => {
+    addLogEntry("EMERGENCY STOPPING.");
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        function: () => window.postMessage({ type: "EMERGENCY" }, "*")
+    });
+});
+
 const logContainer = document.getElementById('log-container');
 const logs = new Set(); // Use a Set to avoid duplicates
 
@@ -48,9 +57,13 @@ document.getElementById("clear").addEventListener("click", async () => {
     chrome.scripting.executeScript({
         target: { tabId: tab.id },
         function: async () => {
-            window.postMessage({ type: "CLEAR" }, "*")
+            window.postMessage({ type: "CLEAR" }, "*");
         }
     });
+    
+    // Clear the displayed logs
+    logContainer.innerHTML = '';
+    logs.clear(); // Reset the Set used for log entries
 });
 
 // Listen for messages from the content script
@@ -72,4 +85,4 @@ setInterval(() => {
     chrome.storage.local.get({ logs: [] }, (data) => {
         data.logs.reverse().forEach(log => addLogEntry(log)); // This should still be unique due to the Set
     });
-}, 1000);
+}, 100);
