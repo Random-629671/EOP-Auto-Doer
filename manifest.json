@@ -1,0 +1,21 @@
+{
+    "manifest_version": 3,
+    "name": "EOP auto doer",
+    "version": "1.6",
+    "permissions": ["scripting", "activeTab", "storage", "notifications"],
+    "action": {
+    "default_popup": "popup.html"
+    },
+        "background": {
+        "service_worker": "background.js"
+    },
+        "content_scripts": [
+        {
+            "matches": ["*://eop.edu.vn/*"],
+            "js": ["lib/tesseract.min.js", "content.js"]
+        }
+    ],
+        "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    }
+}

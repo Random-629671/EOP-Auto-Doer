@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Form Automation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            width: 450px; /* Set a fixed width for the popup */
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 6px; /* Add spacing between buttons */
+            flex-wrap: wrap; /* Allow buttons to wrap to the next line if needed */
+            padding: 10px;
+            background-color: #f1f1f1;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #log-container {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px;
+            height: 350px; /* Reduce height to fit the popup */
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            font-size: 14px; /* Adjust font size */
+            color: #555;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="button-container">
+        <button id="start-button">Start</button>
+        <button id="one-click">One Click</button>
+        <button id="stop">Stop</button>
+        <button id="clear">Clear Logs</button>
+    </div>
+    <div id="log-container">Logs will appear here...</div>
+    <script src="popup.js"></script>
+</body>
+</html>
