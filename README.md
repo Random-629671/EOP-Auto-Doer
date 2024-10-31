@@ -19,13 +19,13 @@ Come with Tesseract.js
 
 ## Known bug, milestone
 
- -   OCR Bug:
+ - OCR Bug:
      - In some case it will reconize "C" as "Cc" (need temp fix by change all "Cc" to "C" in code or fix OCR(impossible)) (patch released)
      - Also sometime misread the dot "." and other chacracters aswell! (patch released)
  - Task type:
    - Cannot work on word scramble task type (the task give a how to spell or a voice someone saying a word with a bunch of characters and force you to put the character in correct order)
    - On old task they somehow didn't use image mechanic but direct word as answer, just copy paste.
- - Stopping: the stop command still need to the run cycle to complete (?) (patch released)
+ - Stopping: the stop command still need to the run cycle to complete (?) (patch released(patch to patch the patch released))
  - Notifying: make a notify when unsupported task type or error appear
  - "cApTcHa": forgot to add a function to skip web stupid captcha (well, they don't even put a picture in their captcha lol)
 
