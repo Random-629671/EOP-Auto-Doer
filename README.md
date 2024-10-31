@@ -35,6 +35,7 @@ Come with Tesseract.js
        - "j" to "1"
        - "i" to nothing (idk ask tesseract)
        - "rn" (in turn) to "m"
+       - Word got stick together ("It is" to "Itis", "AT and" to "ATand",...)
      - Also sometime misread the dot "." and other chacracters aswell! (patch released)
  - Task type:
    - Cannot work on word scramble task type (the task give a how to spell or a voice someone saying a word with a bunch of characters and force you to put the character in correct order)
