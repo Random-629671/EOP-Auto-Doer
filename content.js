@@ -1,6 +1,5 @@
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let isAutoRunning = false;
-let isRunFinished = false;
 let isEmergency = false;
 
 async function fillInputsWithText(text = "a") {
@@ -25,6 +24,7 @@ async function clickButton(selector, buttonname) {
 
 async function performOCR() {
     if (isEmergency) return;
+    logger("OCR is working");
     const words = [];
     const allInputs = document.querySelectorAll('input.danw.dinline[type="text"]');
     let index = 0;
@@ -57,6 +57,7 @@ async function performOCR() {
             words.push("error");
         }
     }
+    await worker.terminate();
     return words;
 }
 
@@ -90,30 +91,40 @@ async function checkType() {
 }
 
 async function textTask(isdelay) {
+    let success;
+    if (isdelay) success = checkSuccess(44444);
+    else success = checkSuccess(15000);
     await fillInputsWithText();
-    if (isEmergency) return;
+    if (isEmergency || success == true) return;
     await delay(3000);
     await clickButton("button.btn.btn-info.dnut", "complete");
-    if (isEmergency) return;
-    if (isdelay) await delay(25000);
-    if (await checkSuccess()) return;
+    if (isEmergency || success == true) return;
+    if (isdelay) {
+        await delay(9000);
+        logger("We are still running");
+        await delay(9000);
+        logger("We are still running");
+        await delay(9000);
+        logger("We are still running");
+    }
     await clickButton("button.btn.btn-danger.dnut", "answer");
-    if (isEmergency) return;
+    if (isEmergency || success == true) return;
     await delay(3000);
     const words = await performOCR();
-    if (isEmergency) return;
+    if (isEmergency || success == true) return;
     await delay(3000);
     await clickButton("button.btn.dnut.btn-primary", "retry");
-    if (isEmergency) return;
+    if (isEmergency || success == true) return;
     await delay(2000);
     await fillInputsWithWords(words);
-    if (isEmergency) return;
+    if (isEmergency || success == true) return;
     await delay(3000);
     await clickButton("button.btn.btn-info.dnut", "complete");
 }
 
 async function multichoiceTask() {
-    if (isEmergency) return;
+    let success = checkSuccess(20000);
+    if (isEmergency || success == true) return;
     const questions = document.querySelectorAll('.ques');
     if (!questions) {
         logger("Cannot found question!");
@@ -121,7 +132,7 @@ async function multichoiceTask() {
     }
 
     for (const question of questions) {
-        if (isEmergency) return;
+        if (isEmergency || success == true) return;
         const options = question.querySelectorAll('.dchk');
         if (!options) {
             logger("Found question but cannot found choice!");
@@ -138,20 +149,20 @@ async function multichoiceTask() {
     }
 
     await clickButton("button.btn.btn-info.dnut", "complete");
-    if (isEmergency) return;
+    if (isEmergency || success == true) return;
     await delay(3000);
 
     let allGreen = false;
     let checkedtime = 0;
 
     while (!allGreen) {
-        if (isEmergency) return;
+        if (isEmergency || success == true) return;
         allGreen = true;
         checkedtime++;
         let prechecked = false;
 
         for (let question of questions) {
-            if (isEmergency) return;
+            if (isEmergency || success == true) return;
             const options = question.querySelectorAll('.dchk');
             let questionHasRed = false;
 
@@ -164,7 +175,7 @@ async function multichoiceTask() {
             }
 
             if (questionHasRed) {
-                if (isEmergency) return;
+                if (isEmergency || success == true) return;
                 for (let i = checkedtime; i < options.length; i++) {
                     const nextOption = options[i];
                     const nextClickableElement = nextOption.querySelector('label');
@@ -183,17 +194,18 @@ async function multichoiceTask() {
         }
 
         await clickButton("button.btn.btn-info.dnut", "complete");
-        if (isEmergency) return;
+        if (isEmergency || success == true) return;
         await delay(3000);
     }
 }
 
 async function vocabTask() {
-    if (isEmergency) return;
+    let success = checkSuccess(160000);
+    if (isEmergency || success == true) return;
     const rows = document.querySelectorAll('.row');
     
     for (const row of rows) {
-        if (isEmergency) return;
+        if (isEmergency || success == true) return;
         const audioButtons = row.querySelectorAll('.fa.fa-play-circle.daudio');
         for (const button of audioButtons) {
             button.click();
@@ -206,20 +218,25 @@ async function vocabTask() {
 }
 
 async function chooseWordTask() {
-    if (isEmergency) return;
-    const dansElements = document.querySelectorAll('.dans');
-    if (dansElements.length === 0) return;
+    let success = checkSuccess(160000);
+    if (isEmergency || success == true) return;
+    const qidContainers = document.querySelectorAll('[id^="qid"]');
     
-    for (const dans of dansElements) {
-        if (isEmergency) return;
-        const dtitle = dans.querySelector('.dtitle');
-        dtitle.click();
-        if (!dtitle.style.border === '1px dotted red') {
-            await delay(5000);
-            chooseWordTask();
-            break;
+    for (const qidx of qidContainers) {
+        if (isEmergency || success == true) return;
+        const dansElements = qidx.querySelectorAll(".dans");
+        await delay(2000);
+    
+        for (const dans of dansElements) {
+            if (isEmergency || success == true) return;
+            const dtitle = dans.querySelector('.dtitle');
+            dtitle.click();
+            await delay(1000);
+            if (dans.style.border !== '1px dotted red') {
+                await delay(5000);
+                break;
+            }
         }
-        await delay(5000);
     }
 }
 
@@ -251,6 +268,7 @@ async function logger(message) {
         window.postMessage({ type: "LOG", message: logEntry }, "*");
     });
 }
+
 function notify(message, title) {
     chrome.notifications.create({
         type: 'basic',
@@ -259,25 +277,21 @@ function notify(message, title) {
     });
 }
 
-async function checkSuccess() {
+function checkSuccess(timeout) {
     let currentPage = location.href;
-    let webChanged = false;
-    for (let i = 0; i < 15; i++) {
-        if (currentPage != location.href) {
-            currentpage = location.href;
-            webChanged = true;
-            break;
+    let localtimeout = timeout;
+    const checkInterval = setInterval(() => {
+        localtimeout -= 500;
+        if (location.href != currentPage) {
+            clearInterval(checkInterval);
+            return true;
         }
-        await delay(500);
-    }
-    if (!webChanged) {
-        logger("Completed a cycle but web didn't change?!" +
-               "Maybe we failed to continue, lagging or something unexpected");
-        //notify("Failed to continue", "Failed...");
-        return false;
-    }
-    return true;
-}         
+        if (localtimeout <= 0) {
+            clearInterval(checkInterval);
+            return false;
+        }
+    }, 500);
+}     
 
 async function start() {
     if (isAutoRunning) {
@@ -288,11 +302,10 @@ async function start() {
     await delay(2000);
     isAutoRunning = true;
     while (isAutoRunning) {
+        let success = checkSuccess(160000);
         if (isEmergency) return;
-        isRunFinished = false;
         let hasPopup = await checkPopup();
         if (hasPopup) {
-            isRunFinished = true;
             await stop();
         }
         if (isEmergency) return;
@@ -304,30 +317,26 @@ async function start() {
         else if (type == 4) await chooseWordTask();
         else if (type == 0) {
             logger("Unsupported question type, manual work required");
-            isRunFinished = true;
             await stop();
         }
         if (isEmergency) return;
-        isRunFinished = true;
-        let success = await checkSuccess();
-        if (!success) await stop();
-        await delay(16000);
+        await delay(6100);
+        if (success != true) {
+            logger("We failed to continue");
+            return;
+        }
+        logger("A task completed");
+        await delay(8000);
+        logger("We are still running");
+        await delay(8000);
+        logger("We are still running");
     }
     return;
 }
 
-async function wait() {
-    return new Promise(async (resolve) => {
-        while(!isRunFinished) {
-            if (isRunFinished) resolve();
-        }
-    });
-}
-
 async function stop() {
-    await delay(1000);
     isAutoRunning = false;
-    await wait();
+    await delay(30000);
     return;
 }
 
@@ -364,6 +373,7 @@ window.addEventListener("message", async (event) => {
     
     if (event.data.type === "CLEAR") {
         await chrome.storage.local.set({ logs: [] });
+        logger("Log cleared");
     }
     
     if (event.data.type === "EMERGENY") {
