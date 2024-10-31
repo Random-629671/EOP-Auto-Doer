@@ -1,6 +1,7 @@
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let isAutoRunning = false;
 let isEmergency = false;
+let urlChanged;
 
 async function fillInputsWithText(text = "a") {
     const inputs = document.querySelectorAll('input.danw.dinline[type="text"]:not([disabled])');
@@ -91,14 +92,11 @@ async function checkType() {
 }
 
 async function textTask(isdelay) {
-    let success;
-    if (isdelay) success = checkSuccess(44444);
-    else success = checkSuccess(15000);
     await fillInputsWithText();
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     await delay(3000);
     await clickButton("button.btn.btn-info.dnut", "complete");
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     if (isdelay) {
         await delay(9000);
         logger("We are still running");
@@ -108,23 +106,22 @@ async function textTask(isdelay) {
         logger("We are still running");
     }
     await clickButton("button.btn.btn-danger.dnut", "answer");
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     await delay(3000);
     const words = await performOCR();
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     await delay(3000);
     await clickButton("button.btn.dnut.btn-primary", "retry");
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     await delay(2000);
     await fillInputsWithWords(words);
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     await delay(3000);
     await clickButton("button.btn.btn-info.dnut", "complete");
 }
 
 async function multichoiceTask() {
-    let success = checkSuccess(20000);
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     const questions = document.querySelectorAll('.ques');
     if (!questions) {
         logger("Cannot found question!");
@@ -132,7 +129,7 @@ async function multichoiceTask() {
     }
 
     for (const question of questions) {
-        if (isEmergency || success == true) return;
+        if (isEmergency || urlChanged == true) return;
         const options = question.querySelectorAll('.dchk');
         if (!options) {
             logger("Found question but cannot found choice!");
@@ -149,20 +146,20 @@ async function multichoiceTask() {
     }
 
     await clickButton("button.btn.btn-info.dnut", "complete");
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     await delay(3000);
 
     let allGreen = false;
     let checkedtime = 0;
 
     while (!allGreen) {
-        if (isEmergency || success == true) return;
+        if (isEmergency || urlChanged == true) return;
         allGreen = true;
         checkedtime++;
         let prechecked = false;
 
         for (let question of questions) {
-            if (isEmergency || success == true) return;
+            if (isEmergency || urlChanged == true) return;
             const options = question.querySelectorAll('.dchk');
             let questionHasRed = false;
 
@@ -175,7 +172,7 @@ async function multichoiceTask() {
             }
 
             if (questionHasRed) {
-                if (isEmergency || success == true) return;
+                if (isEmergency || urlChanged == true) return;
                 for (let i = checkedtime; i < options.length; i++) {
                     const nextOption = options[i];
                     const nextClickableElement = nextOption.querySelector('label');
@@ -194,18 +191,17 @@ async function multichoiceTask() {
         }
 
         await clickButton("button.btn.btn-info.dnut", "complete");
-        if (isEmergency || success == true) return;
+        if (isEmergency || urlChanged == true) return;
         await delay(3000);
     }
 }
 
 async function vocabTask() {
-    let success = checkSuccess(160000);
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     const rows = document.querySelectorAll('.row');
     
     for (const row of rows) {
-        if (isEmergency || success == true) return;
+        if (isEmergency || urlChanged == true) return;
         const audioButtons = row.querySelectorAll('.fa.fa-play-circle.daudio');
         for (const button of audioButtons) {
             button.click();
@@ -218,17 +214,16 @@ async function vocabTask() {
 }
 
 async function chooseWordTask() {
-    let success = checkSuccess(160000);
-    if (isEmergency || success == true) return;
+    if (isEmergency || urlChanged == true) return;
     const qidContainers = document.querySelectorAll('[id^="qid"]');
     
     for (const qidx of qidContainers) {
-        if (isEmergency || success == true) return;
+        if (isEmergency || urlChanged == true) return;
         const dansElements = qidx.querySelectorAll(".dans");
         await delay(2000);
     
         for (const dans of dansElements) {
-            if (isEmergency || success == true) return;
+            if (isEmergency || urlChanged == true) return;
             const dtitle = dans.querySelector('.dtitle');
             dtitle.click();
             await delay(1000);
@@ -278,17 +273,21 @@ function notify(message, title) {
 }
 
 function checkSuccess(timeout) {
+    urlChanged = false;
     let currentPage = location.href;
     let localtimeout = timeout;
     const checkInterval = setInterval(() => {
         localtimeout -= 500;
         if (location.href != currentPage) {
             clearInterval(checkInterval);
-            return true;
+            logger("Web url changed");
+            urlChanged = true;
+            return;
         }
         if (localtimeout <= 0) {
             clearInterval(checkInterval);
-            return false;
+            logger("Timed out");
+            return;
         }
     }, 500);
 }     
@@ -302,7 +301,7 @@ async function start() {
     await delay(2000);
     isAutoRunning = true;
     while (isAutoRunning) {
-        let success = checkSuccess(160000);
+        checkSuccess(160000);
         if (isEmergency) return;
         let hasPopup = await checkPopup();
         if (hasPopup) {
@@ -321,15 +320,12 @@ async function start() {
         }
         if (isEmergency) return;
         await delay(6100);
-        if (success != true) {
+        if (urlChanged != true) {
             logger("We failed to continue");
             return;
         }
         logger("A task completed");
-        await delay(8000);
-        logger("We are still running");
-        await delay(8000);
-        logger("We are still running");
+        await delay(4444);
     }
     return;
 }
@@ -376,12 +372,12 @@ window.addEventListener("message", async (event) => {
         logger("Log cleared");
     }
     
-    if (event.data.type === "EMERGENY") {
+    if (event.data.type === "EMERGENCY") {
         logger("Emergency case");
         isEmergency = true;
         isRunFinished = true;
         isAutoRunning = false;
-        await delay(5000);
+        await delay(10000);
         isEmergency = false;
     }
 });
