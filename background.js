@@ -7,3 +7,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
     }
 });
+
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.storage.local.get({ logs: [] }, (data) => {
+        if (!data.logs) {
+            chrome.storage.local.set({ logs: [] });
+        }
+    });
+});
