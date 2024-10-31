@@ -20,7 +20,7 @@ Come with Tesseract.js
 
 ## Tutorials
 
- - Download code.
+ - Download code in release.
  - Extract it somewhere on your computer.
  - Load extracted on your browser.
  - Open EOP, open task, click start.
