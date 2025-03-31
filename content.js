@@ -3,7 +3,7 @@ let isAutoRunning = false;
 let isEmergency = false;
 let urlChanged;
 
-async function fillInputsWithText(text = "a") {
+async function fillInputsWithText(text = "luv u") {
     const inputs = document.querySelectorAll('input.danw.dinline[type="text"]:not([disabled])');
     let numofinput = 0;
     inputs.forEach(input => {
@@ -29,29 +29,55 @@ async function performOCR() {
     const words = [];
     const allInputs = document.querySelectorAll('input.danw.dinline[type="text"]');
     let index = 0;
-    const worker = await Tesseract.createWorker("eng", 1, {
+    console.log("Init worker");
+    const worker = await Tesseract.createWorker("eng", {
         corePath: chrome.runtime.getURL('lib/tesseract-core.wasm.js'),
         workerPath: chrome.runtime.getURL('lib/worker.min.js'),
         langPath: chrome.runtime.getURL('lib/traineddata/')
+    });
+
+    console.log("Set param");
+    await worker.setParameters({
+        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'-., /?!",
+        user_defined_dpi: 400,
+        tessedit_pageseg_mode: 7,
     });
     
     for (const input of allInputs) {
         if (isEmergency) return;
         index++;
+        console.log("Processing input", index);
         const backgroundStyle = input.style.backgroundImage;
 
         if (backgroundStyle && backgroundStyle.startsWith('url("data:image/png;base64,')) {
             const base64Image = backgroundStyle.slice(27, -2);
+            const preprocessImage = await preprocess(base64Image);
 
             try {
-                const { data: { text } } = await worker.recognize(`data:image/png;base64,${base64Image}`);
+                const { data: { text } } = await worker.recognize(preprocessImage);
                 let temp = text.trim();
-                if (temp == "Cc") temp = "C";
+                
+                //temp fix for OCR error
+                if (temp) {
+                    switch (temp) {
+                        case "Cc": 
+                            temp = "C";
+                            break;
+                        case "Itis":
+                            temp = "It is";
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                
                 words.push(temp);
                 logger("Input number " + index + " filled with text: " + temp);
+                await delay(160);
             } catch (error) {
                 logger("Cannot OCR place number " + index);
                 words.push("error");
+                logger(error);
             }
         } else {
             logger("Place number " + index + " is not base64 image type");
@@ -60,6 +86,91 @@ async function performOCR() {
     }
     await worker.terminate();
     return words;
+}
+
+async function preprocess(base64) {
+    return new Promise((resolve, reject) => {
+        let img = new Image();
+        img.src = `data:image/png;base64,${base64}`;
+        img.onload = function () {
+            let canvas = document.createElement("canvas");
+            let ctx = canvas.getContext("2d");
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let pixel = imageData.data;
+            let width = canvas.width;
+            let height = canvas.height;
+
+            for (let i = 0; i < pixel.length; i ++) {
+                pixel[i] += 10;
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            let gapThreshold = 3;
+            let extraSpacing = 5;
+            let columnIsEmpty = new Array(width).fill(true);
+
+            for (let x = 0; x < width; x++) {
+                for (let y = 0; y < height; y++) {
+                    let index = (y * width + x) * 4;
+                    if (pixel[index] === 0) {
+                        columnIsEmpty[x] = false;
+                        break;
+                    }
+                }
+            }
+
+            let newCanvas = document.createElement("canvas");
+            let newCtx = newCanvas.getContext("2d");
+
+            let newWidth = width;
+            let extraColumns = [];
+            for (let x = 0; x < width; x++) {
+                if (columnIsEmpty[x]) {
+                    let gapSize = 0;
+                    while (x + gapSize < width && columnIsEmpty[x + gapSize]) {
+                        gapSize++;
+                    }
+                    if (gapSize >= gapThreshold) {
+                        extraColumns.push({ x, size: extraSpacing });
+                        newWidth += extraSpacing;
+                    }
+                    x += gapSize - 1;
+                }
+            }
+
+            newCanvas.width = newWidth;
+            newCanvas.height = height;
+
+            let newX = 0;
+            for (let x = 0; x < width; x++) {
+                if (extraColumns.some(col => col.x === x)) {
+                    newX += extraSpacing;
+                }
+                newCtx.drawImage(canvas, x, 0, 1, height, newX, 0, 1, height);
+                newX++;
+            }
+
+            let oldData = newCanvas.toDataURL(base64);
+            console.log(oldData);
+            let processedData = newCanvas.toDataURL("image/png");
+            console.log(processedData);
+            console.log("Preprocessing success!");
+
+            resolve(processedData);
+        };
+
+        img.onerror = function () {
+            console.log("Image failed to load.");
+            reject("Image failed to load");
+        };
+    });
 }
 
 async function fillInputsWithWords(words) {
@@ -237,6 +348,7 @@ async function chooseWordTask() {
 
 async function checkPopup() {
     const skipbutton = document.querySelector(".button.btn.btn-secondary");
+    const captchabutton = document.querySelector(".fa.fa-close");
     if (skipbutton) {/*
         notify("A weird popup appear, extension stopped..." +
                "\nWe tried to close it but you still need to check by yourself", "A wild popup appear");*/
@@ -294,7 +406,7 @@ function checkSuccess(timeout) {
 
 async function start() {
     if (isAutoRunning) {
-        logger("Dupplicate calling detected!");
+        logger("Dupplicate calling detected! Returning...");
         return;
     }
     if (isEmergency) return;
@@ -321,8 +433,12 @@ async function start() {
         if (isEmergency) return;
         await delay(6100);
         if (urlChanged != true) {
-            logger("We failed to continue");
-            return;
+            logger("We failed to continue. Please do it by yourself in 10 secs!");
+            await delay(10000);
+            if (urlChanged != true) {
+                isAutoRunning = false;
+                return;
+            }
         }
         logger("A task completed");
         await delay(4444);
@@ -343,6 +459,7 @@ window.addEventListener("message", async (event) => {
     }
     
     if (event.data.type === "ONE_CLICK") {
+        urlChanged = false;
         logger("One-time automation started... " + "Make sure you have passed 30 secs before continue!");
         let hasPopup = await checkPopup();
         if (isEmergency) return;
@@ -379,5 +496,6 @@ window.addEventListener("message", async (event) => {
         isAutoRunning = false;
         await delay(10000);
         isEmergency = false;
+        logger("Emergency completed");
     }
 });
