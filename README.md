@@ -15,7 +15,7 @@ Come with Tesseract.js
  - Word choose (give pronoun, sound, vietnamese type and need to choose correct word in some answer): 100% working
  - Multichoice (question with... multiple choice, wdyw?): 100% working
  - Reading (there have nothing, just click next): 100% working
- - Text fill (fill the text into blank): 16% read wrong word, cause to 3 out of 10 task cannot be done (70% working)
+ - Text fill (fill the text into blank): ~~16% read wrong word, cause to 3 out of 10 task cannot be done~~ Improved preprocess image and OCR to get higher accurate (85% working)
  - Word scramble (give pronoun, sound, vietnamese type and bunch of character and need to sort it): not supported
 
 ## Tutorials
@@ -34,7 +34,7 @@ Come with Tesseract.js
        - "g" to "a"
        - "j" to "1"
        - "i" to nothing (idk ask tesseract)
-       - "rn" (in turn) to "m"
+       - "rn" (in turn/internet) to "m"
        - Word got stick together ("It is" to "Itis", "AT and" to "ATand",...)
      - Also sometime misread the dot "." and other chacracters aswell! (patch released)
  - Task type:
