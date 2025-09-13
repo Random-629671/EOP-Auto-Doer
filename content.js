@@ -63,12 +63,14 @@ async function performOCR() {
                         case "Cc": 
                             temp = "C";
                             break;
-                        case "Itis":
-                            temp = "It is";
+                        case "":
+                            temp = "i";
                             break;
                         default:
                             break;
                     }
+
+                    if (temp.trim().includes('-f')) temp.replace('-f', '-t');
                 }
                 
                 words.push(temp);
@@ -89,87 +91,102 @@ async function performOCR() {
 }
 
 async function preprocess(base64) {
+    await new Promise(resolve => {
+        const checkCv = () => {
+            if (window.cv && window.cv.imread) {
+                resolve();
+            } else {
+                setTimeout(checkCv, 50);
+            }
+        };
+        checkCv();
+    });
+
     return new Promise((resolve, reject) => {
-        let img = new Image();
+        const SCALE_FACTOR = 2;
+        const BINARY_THRESHOLD = 150;
+        const MORPH_KERNEL_SIZE = new cv.Size(1, 7);
+        const SPACE_THRESHOLD = 8;
+        const CHAR_SPACING = 4;
+        const WORD_SPACING = 16;
+
+
+        let originalImg = new Image();
         img.src = `data:image/png;base64,${base64}`;
-        img.onload = function () {
+
+        originalImg.onload = function () {
             let canvas = document.createElement("canvas");
             let ctx = canvas.getContext("2d");
+            canvas.width = originalImg.width * SCALE_FACTOR;
+            canvas.height = originalImg.height * SCALE_FACTOR;
+            ctx.drawImage(originalImg, 0, 0, canvas.width, canvas.height);
+            
+            let src = cv.imread(canvas);
+            let binaryMat = new cv.Mat();
+            cv.cvtColor(src, binaryMat, cv.COLOR_RGBA2GRAY, 0);
+            cv.threshold(binaryMat, binaryMat, BINARY_THRESHOLD, 255, cv.THRESH_BINARY_INV);
 
-            canvas.width = img.width;
-            canvas.height = img.height;
+            let morphMat = new cv.Mat();
+            let kernel = cv.getStructuringElement(cv.MORPH_RECT, MORPH_KERNEL_SIZE);
+            cv.morphologyEx(binaryMat, morphMat, cv.MORPH_CLOSE, kernel);
 
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+            cv.findContours(morphMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            let pixel = imageData.data;
-            let width = canvas.width;
-            let height = canvas.height;
-
-            for (let i = 0; i < pixel.length; i ++) {
-                pixel[i] += 10;
+            let boundingBoxes = [];
+            for (let i = 0; i < contours.size(); ++i) {
+                boundingBoxes.push(cv.boundingRect(contours.get(i)));
             }
+            boundingBoxes.sort((a, b) => a.x - b.x);
 
-            ctx.putImageData(imageData, 0, 0);
-
-            let gapThreshold = 3;
-            let extraSpacing = 5;
-            let columnIsEmpty = new Array(width).fill(true);
-
-            for (let x = 0; x < width; x++) {
-                for (let y = 0; y < height; y++) {
-                    let index = (y * width + x) * 4;
-                    if (pixel[index] === 0) {
-                        columnIsEmpty[x] = false;
-                        break;
-                    }
-                }
+            if (boundingBoxes.length === 0) {
+                resolve(base64);
+                return;
+            }
+            
+            let newWidth = 0;
+            newWidth += boundingBoxes.reduce((acc, box) => acc + box.width, 0);
+            for (let i = 1; i < boundingBoxes.length; i++) {
+                let prevBox = boundingBoxes[i - 1];
+                let currentBox = boundingBoxes[i];
+                let gap = currentBox.x - (prevBox.x + prevBox.width);
+                newWidth += (gap > SPACE_THRESHOLD) ? WORD_SPACING : CHAR_SPACING;
             }
 
             let newCanvas = document.createElement("canvas");
-            let newCtx = newCanvas.getContext("2d");
-
-            let newWidth = width;
-            let extraColumns = [];
-            for (let x = 0; x < width; x++) {
-                if (columnIsEmpty[x]) {
-                    let gapSize = 0;
-                    while (x + gapSize < width && columnIsEmpty[x + gapSize]) {
-                        gapSize++;
-                    }
-                    if (gapSize >= gapThreshold) {
-                        extraColumns.push({ x, size: extraSpacing });
-                        newWidth += extraSpacing;
-                    }
-                    x += gapSize - 1;
-                }
-            }
-
             newCanvas.width = newWidth;
-            newCanvas.height = height;
+            newCanvas.height = canvas.height;
+            let newCtx = newCanvas.getContext("2d");
+            newCtx.fillStyle = "white";
+            newCtx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+            
+            let currentX = 0;
+            for (let i = 0; i < boundingBoxes.length; i++) {
+                let box = boundingBoxes[i];
+                newCtx.drawImage(
+                    canvas,
+                    box.x, box.y, box.width, box.height,
+                    currentX, box.y, box.width, box.height
+                );
 
-            let newX = 0;
-            for (let x = 0; x < width; x++) {
-                if (extraColumns.some(col => col.x === x)) {
-                    newX += extraSpacing;
+                currentX += box.width;
+
+                if (i < boundingBoxes.length - 1) {
+                    let nextBox = boundingBoxes[i + 1];
+                    let gap = nextBox.x - (box.x + box.width);
+                    currentX += (gap > SPACE_THRESHOLD) ? WORD_SPACING : CHAR_SPACING;
                 }
-                newCtx.drawImage(canvas, x, 0, 1, height, newX, 0, 1, height);
-                newX++;
             }
 
-            let oldData = newCanvas.toDataURL(base64);
-            console.log(oldData);
-            let processedData = newCanvas.toDataURL("image/png");
-            console.log(processedData);
-            console.log("Preprocessing success!");
-
-            resolve(processedData);
+            src.delete(); binaryMat.delete(); morphMat.delete();
+            contours.delete(); hierarchy.delete(); kernel.delete();
+            const processedBase64 = newCanvas.toDataURL("image/png");
+            console.log('Processed image:', processedBase64);
+            resolve(processedBase64);
         };
 
-        img.onerror = function () {
-            console.log("Image failed to load.");
-            reject("Image failed to load");
-        };
+        originalImg.onerror = function () { reject("Image failed to load."); };
     });
 }
 
@@ -346,7 +363,7 @@ async function chooseWordTask() {
     }
 }
 
-async function checkPopup() {
+async function checkPopup() { // Fix later until i found that sus code
     const skipbutton = document.querySelector(".button.btn.btn-secondary");
     const captchabutton = document.querySelector(".fa.fa-close");
     if (skipbutton) {/*
@@ -361,7 +378,8 @@ async function checkPopup() {
 
 async function logger(message) {
     const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `${timestamp} - ${message}`;
+    const date = new Date().getFullYear() + "-" + (new Date().getMonth() + 1) + "-" + new Date().getDate();
+    const logEntry = `${date} - ${timestamp} --- ${message}`;
 
     // Save the log to chrome storage
     chrome.storage.local.get({ logs: [] }, async (data) => {
