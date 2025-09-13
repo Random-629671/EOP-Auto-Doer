@@ -91,79 +91,108 @@ async function performOCR() {
 }
 
 async function preprocess(base64) {
-    await new Promise(resolve => {
-        const checkCv = () => {
-            if (window.cv && window.cv.imread) {
-                resolve();
-            } else {
-                setTimeout(checkCv, 50);
-            }
-        };
-        checkCv();
-    });
-
     return new Promise((resolve, reject) => {
-        const SCALE_FACTOR = 2;
+        const SCALE_FACTOR = 2.5;
         const BINARY_THRESHOLD = 150;
-        const MORPH_KERNEL_SIZE = new cv.Size(1, 7);
-        const SPACE_THRESHOLD = 8;
         const CHAR_SPACING = 4;
         const WORD_SPACING = 16;
+        const SPACE_THRESHOLD = 8;
 
-
-        let originalImg = new Image();
-        img.src = `data:image/png;base64,${base64}`;
+        const originalImg = new Image();
+        originalImg.src = `data:image/png;base64,${base64}`;
 
         originalImg.onload = function () {
-            let canvas = document.createElement("canvas");
-            let ctx = canvas.getContext("2d");
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
             canvas.width = originalImg.width * SCALE_FACTOR;
             canvas.height = originalImg.height * SCALE_FACTOR;
             ctx.drawImage(originalImg, 0, 0, canvas.width, canvas.height);
-            
-            let src = cv.imread(canvas);
-            let binaryMat = new cv.Mat();
-            cv.cvtColor(src, binaryMat, cv.COLOR_RGBA2GRAY, 0);
-            cv.threshold(binaryMat, binaryMat, BINARY_THRESHOLD, 255, cv.THRESH_BINARY_INV);
 
-            let morphMat = new cv.Mat();
-            let kernel = cv.getStructuringElement(cv.MORPH_RECT, MORPH_KERNEL_SIZE);
-            cv.morphologyEx(binaryMat, morphMat, cv.MORPH_CLOSE, kernel);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
 
-            let contours = new cv.MatVector();
-            let hierarchy = new cv.Mat();
-            cv.findContours(morphMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-            let boundingBoxes = [];
-            for (let i = 0; i < contours.size(); ++i) {
-                boundingBoxes.push(cv.boundingRect(contours.get(i)));
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                const color = avg > BINARY_THRESHOLD ? 255 : 0;
+                data[i] = data[i + 1] = data[i + 2] = color;
             }
-            boundingBoxes.sort((a, b) => a.x - b.x);
+            ctx.putImageData(imageData, 0, 0);
+
+            const boundingBoxes = [];
+            let inCharacter = false;
+            let startX = 0;
+
+            for (let x = 0; x < canvas.width; x++) {
+                let isColumnEmpty = true;
+                for (let y = 0; y < canvas.height; y++) {
+                    const alpha = data[(y * canvas.width + x) * 4 + 3];
+                    const red = data[(y * canvas.width + x) * 4];
+                    if (alpha > 0 && red === 0) {
+                        isColumnEmpty = false;
+                        break;
+                    }
+                }
+
+                if (!inCharacter && !isColumnEmpty) {
+                    inCharacter = true;
+                    startX = x;
+                } else if (inCharacter && isColumnEmpty) {
+                    inCharacter = false;
+                    const boxWidth = x - startX;
+                    let minY = canvas.height, maxY = -1;
+                    for(let j = startX; j < x; j++){
+                        for(let i = 0; i < canvas.height; i++){
+                            if(data[(i * canvas.width + j) * 4] === 0){
+                                if(i < minY) minY = i;
+                                if(i > maxY) maxY = i;
+                            }
+                        }
+                    }
+                    if(maxY > -1) {
+                         boundingBoxes.push({ x: startX, y: minY, width: boxWidth, height: maxY - minY + 1 });
+                    }
+                }
+            }
+            if (inCharacter) {
+                const boxWidth = canvas.width - startX;
+                let minY = canvas.height, maxY = -1;
+                for(let j = startX; j < canvas.width; j++){
+                    for(let i = 0; i < canvas.height; i++){
+                        if(data[(i * canvas.width + j) * 4] === 0){
+                            if(i < minY) minY = i;
+                            if(i > maxY) maxY = i;
+                        }
+                    }
+                }
+                if (maxY > -1) {
+                    boundingBoxes.push({ x: startX, y: minY, width: boxWidth, height: maxY - minY + 1 });
+                }
+            }
 
             if (boundingBoxes.length === 0) {
                 resolve(base64);
                 return;
             }
             
-            let newWidth = 0;
-            newWidth += boundingBoxes.reduce((acc, box) => acc + box.width, 0);
+            let newWidth = boundingBoxes.reduce((acc, box) => acc + box.width, 0);
             for (let i = 1; i < boundingBoxes.length; i++) {
-                let prevBox = boundingBoxes[i - 1];
-                let currentBox = boundingBoxes[i];
-                let gap = currentBox.x - (prevBox.x + prevBox.width);
+                const prevBox = boundingBoxes[i - 1];
+                const currentBox = boundingBoxes[i];
+                const gap = currentBox.x - (prevBox.x + prevBox.width);
                 newWidth += (gap > SPACE_THRESHOLD) ? WORD_SPACING : CHAR_SPACING;
             }
 
-            let newCanvas = document.createElement("canvas");
+            const newCanvas = document.createElement("canvas");
             newCanvas.width = newWidth;
             newCanvas.height = canvas.height;
-            let newCtx = newCanvas.getContext("2d");
+            const newCtx = newCanvas.getContext("2d");
             newCtx.fillStyle = "white";
             newCtx.fillRect(0, 0, newCanvas.width, newCanvas.height);
-            
+
             let currentX = 0;
             for (let i = 0; i < boundingBoxes.length; i++) {
-                let box = boundingBoxes[i];
+                const box = boundingBoxes[i];
                 newCtx.drawImage(
                     canvas,
                     box.x, box.y, box.width, box.height,
@@ -173,17 +202,13 @@ async function preprocess(base64) {
                 currentX += box.width;
 
                 if (i < boundingBoxes.length - 1) {
-                    let nextBox = boundingBoxes[i + 1];
-                    let gap = nextBox.x - (box.x + box.width);
+                    const nextBox = boundingBoxes[i + 1];
+                    const gap = nextBox.x - (box.x + box.width);
                     currentX += (gap > SPACE_THRESHOLD) ? WORD_SPACING : CHAR_SPACING;
                 }
             }
-
-            src.delete(); binaryMat.delete(); morphMat.delete();
-            contours.delete(); hierarchy.delete(); kernel.delete();
-            const processedBase64 = newCanvas.toDataURL("image/png");
-            console.log('Processed image:', processedBase64);
-            resolve(processedBase64);
+            
+            resolve(newCanvas.toDataURL("image/png"));
         };
 
         originalImg.onerror = function () { reject("Image failed to load."); };
@@ -517,3 +542,4 @@ window.addEventListener("message", async (event) => {
         logger("Emergency completed");
     }
 });
+
