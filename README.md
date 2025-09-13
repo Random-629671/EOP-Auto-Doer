@@ -1,5 +1,5 @@
 # EOP-Auto-Doer
-The automation working for EOP (HaUI)
+The automation working for EOP (HaUI) (someone give attention 😭)
 
 <h1 align="center">EOP Auto Doer (Still need some attention)</h1>
 <p align="center">
